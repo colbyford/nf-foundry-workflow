@@ -1,0 +1,102 @@
+kind: workflow
+trigger:
+  kind: OnConversationStart
+  id: trigger_wf
+  actions:
+    - kind: Question
+      variable: Local.Question
+      id: question_input
+      entity: StringPrebuiltEntity
+      skipQuestionMode: SkipOnFirstExecutionIfVariableHasValue
+      prompt: How can I help with your research?
+    - kind: SetVariable
+      id: set_variable_input_task
+      variable: Local.LatestMessage
+      value: =UserMessage(Local.Question)
+    - kind: SetVariable
+      id: set_variable_turn_count
+      variable: Local.TurnCount
+      value: =0
+    - kind: SendActivity
+      activity: Problem received. Routing to the Bioinformatics Planner agent...
+      id: send_working
+    - kind: InvokeAzureAgent
+      id: bioinformatics_evaluator_agent
+      agent:
+        name: bioinformatics-eval-agent
+      conversationId: =System.ConversationId
+      input: {}
+      output:
+        autoSend: true
+        messages: Local.LatestMessage
+    - kind: ConditionGroup
+      conditions:
+        - id: evaluator_flagged_complete
+          condition: =!IsBlank(Find("[COMPLETE]", Upper(Last(Local.LatestMessage).Text)))
+          actions:
+            - kind: SendActivity
+              activity: |-
+                The Bioinformatics Planner could not proceed:
+
+                {Last(Local.LatestMessage).Text}
+              id: send_evaluator_exit
+            - kind: EndConversation
+              id: end_on_evaluator_flag
+      id: check_evaluator_exit
+      elseActions:
+        - kind: SendActivity
+          activity: Planning complete. Querying Seqera agent for datasets, pipelines, and execution strategy...
+          id: send_evaluator_done
+    - kind: InvokeAzureAgent
+      id: seqera_agent
+      agent:
+        name: seqera-agent
+      conversationId: =System.ConversationId
+      input:
+        messages: =Last(Local.LatestMessage).Text
+      output:
+        autoSend: true
+        messages: Local.LatestMessage
+    - kind: SetVariable
+      id: increment_turn_count
+      variable: Local.TurnCount
+      value: =Local.TurnCount + 1
+    - kind: ConditionGroup
+      conditions:
+        - condition: =!IsBlank(Find("[COMPLETE]", Upper(Last(Local.LatestMessage).Text)))
+          actions:
+            - kind: SendActivity
+              activity: |-
+                Workflow ready for execution! Summary:
+
+                - Research Goal: {Local.Question}
+                - Turns taken: {Local.TurnCount}
+
+                You can now execute this via Nextflow on Seqera Cloud.
+
+                Would you like to analyze another dataset?
+              id: send_complete
+            - kind: EndConversation
+              id: end_success
+          id: check_done
+        - condition: =Local.TurnCount >= 5
+          actions:
+            - kind: SendActivity
+              activity: |-
+                The agents exceeded the maximum refinement turns ({Local.TurnCount}).
+
+                Last output:
+                {Last(Local.LatestMessage).Text}
+              id: send_turn_limit
+            - kind: EndConversation
+              id: end_turn_limit
+          id: check_turn_limit
+      id: refinement_loop
+      elseActions:
+        - kind: SendActivity
+          activity: Agents refining workflow (turn {Local.TurnCount} of 5)...
+          id: send_refinement_notice
+        - kind: GotoAction
+          actionId: bioinformatics_evaluator_agent
+          id: goto_evaluator
+name: nf-Workflow-001
