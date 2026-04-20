@@ -2,7 +2,7 @@
 
 <h3 align="right">Colby T. Ford, Ph.D.</h3>
 
-Demo from Nextflow Summit 2026 on using Microsoft Foundry to orchestrate Nextflow workloads.
+Accompanying code for my [Nextflow Summit 2026 talk](https://summit.nextflow.io/2026/boston/agenda/building-multi-agentic-bioworkflows-with-microsoft-foundry-and-nextflow/) on using Microsoft Foundry to orchestrate Nextflow workloads.
 
 ## Abstract
 
